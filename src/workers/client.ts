@@ -1,3 +1,4 @@
+import type { Settings } from '../core/adjust';
 import type { ProcessResult } from '../core/pipeline';
 import type { RgbaImage } from '../core/types';
 import type { ProcessRequest, ProcessResponse } from './protocol';
@@ -27,7 +28,7 @@ export class ProcessingClient {
 
   constructor(private readonly factory: () => WorkerLike) {}
 
-  run(image: RgbaImage, n: number): Promise<ProcessResult> {
+  run(image: RgbaImage, n: number, settings?: Settings): Promise<ProcessResult> {
     this.cancel();
     const worker = this.factory();
     this.worker = worker;
@@ -41,7 +42,7 @@ export class ProcessingClient {
         if (msg.ok) resolve(msg.result);
         else reject(new Error(msg.error));
       };
-      worker.postMessage({ id, image, n });
+      worker.postMessage({ id, image, n, settings });
     });
   }
 

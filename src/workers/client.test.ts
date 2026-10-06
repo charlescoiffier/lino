@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'vitest';
+import { DEFAULT_SETTINGS } from '../core/adjust';
 import { CancelledError, ProcessingClient, type WorkerLike } from './client';
 import type { ProcessRequest, ProcessResponse } from './protocol';
 import type { ProcessResult } from '../core/pipeline';
@@ -23,6 +24,14 @@ const img: RgbaImage = { width: 1, height: 1, data: new Uint8ClampedArray(4) };
 const result = (tag: number): ProcessResult => ({ width: 1, height: 1, indices: new Uint8Array([tag]), centroidsRgb: [[0, 0, 0]] });
 
 describe('ProcessingClient', () => {
+  test('transmet les réglages au worker', () => {
+    const w = new FakeWorker();
+    const client = new ProcessingClient(() => w);
+    const settings = { ...DEFAULT_SETTINGS, contrast: 30 };
+    client.run(img, 4, settings).catch(() => undefined);
+    expect(w.sent[0].settings).toEqual(settings);
+  });
+
   test('résout avec le résultat du worker', async () => {
     const w = new FakeWorker();
     const client = new ProcessingClient(() => w);

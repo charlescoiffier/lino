@@ -10,7 +10,7 @@ export function fitSize(width: number, height: number, max = MAX_DIMENSION): { w
   };
 }
 
-export async function loadImage(file: File): Promise<RgbaImage> {
+export async function loadImage(file: File, max = MAX_DIMENSION): Promise<RgbaImage> {
   if (!file.type.startsWith('image/')) {
     throw new Error('Format non supporté : choisissez une image (PNG, JPEG ou WebP).');
   }
@@ -20,7 +20,7 @@ export async function loadImage(file: File): Promise<RgbaImage> {
   } catch {
     throw new Error('Impossible de lire cette image.');
   }
-  const { width, height } = fitSize(bitmap.width, bitmap.height);
+  const { width, height } = fitSize(bitmap.width, bitmap.height, max);
   const canvas = new OffscreenCanvas(width, height);
   const ctx = canvas.getContext('2d');
   if (!ctx) {
