@@ -23,8 +23,8 @@ test('charger, séparer en 4 calques, attribuer une teinte, exporter', async ({ 
   await page.getByTestId('file-input').setInputFiles({ name: 'quad.png', mimeType: 'image/png', buffer: quadrantsPng() });
   await expect(page.getByTestId('layer-card')).toHaveCount(4);
 
-  await page.getByLabel('Teinte du calque 1').selectOption({ label: 'Violet' });
-  await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('violet');
+  await page.getByLabel('Teinte du calque 1').selectOption({ label: 'Gris Payne' });
+  await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('gris-payne');
 
   const [layerDownload] = await Promise.all([
     page.waitForEvent('download'),
@@ -58,7 +58,7 @@ test('sauvegarde puis réouverture d\'un projet restaure les teintes', async ({ 
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles({ name: 'quad.png', mimeType: 'image/png', buffer: quadrantsPng() });
   await expect(page.getByTestId('layer-card')).toHaveCount(4);
-  await page.getByLabel('Teinte du calque 2').selectOption({ label: 'Rose' });
+  await page.getByLabel('Teinte du calque 2').selectOption({ label: 'Bistre' });
   await page.getByRole('button', { name: 'Enregistrer' }).click();
   // Attendre la fin de l'écriture IndexedDB avant de recharger.
   await expect(page.getByRole('button', { name: 'quad.png', exact: true })).toBeVisible();
@@ -66,7 +66,7 @@ test('sauvegarde puis réouverture d\'un projet restaure les teintes', async ({ 
   await page.reload();
   await page.getByRole('button', { name: 'quad.png', exact: true }).click();
   await expect(page.getByTestId('layer-card')).toHaveCount(4);
-  await expect(page.getByLabel('Teinte du calque 2')).toHaveValue('rose');
+  await expect(page.getByLabel('Teinte du calque 2')).toHaveValue('bistre');
 });
 
 test('les réglages d\'image modifient le résultat et se réinitialisent', async ({ page }) => {
@@ -93,12 +93,12 @@ test('les réglages sont enregistrés avec le projet et teintes choisies conserv
   await page.goto('/');
   await page.getByTestId('file-input').setInputFiles({ name: 'quad.png', mimeType: 'image/png', buffer: quadrantsPng() });
   await expect(page.getByTestId('layer-card')).toHaveCount(4);
-  await page.getByLabel('Teinte du calque 1').selectOption({ label: 'Violet' });
+  await page.getByLabel('Teinte du calque 1').selectOption({ label: 'Gris Payne' });
   await page.getByLabel('Contraste').fill('20');
   await page.getByLabel('Miroir horizontal').check();
   // Un réglage qui ne change pas le nombre de calques garde la teinte choisie à la main.
   await expect(page.getByTestId('layer-card')).toHaveCount(4);
-  await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('violet');
+  await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('gris-payne');
   await page.getByRole('button', { name: 'Enregistrer' }).click();
   // Attendre la fin de l'écriture IndexedDB avant de recharger.
   await expect(page.getByRole('button', { name: 'quad.png', exact: true })).toBeVisible();
@@ -107,5 +107,5 @@ test('les réglages sont enregistrés avec le projet et teintes choisies conserv
   await page.getByRole('button', { name: 'quad.png', exact: true }).click();
   await expect(page.getByLabel('Contraste')).toHaveValue('20');
   await expect(page.getByLabel('Miroir horizontal')).toBeChecked();
-  await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('violet');
+  await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('gris-payne');
 });

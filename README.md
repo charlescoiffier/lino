@@ -29,7 +29,7 @@ bien distinctes, une zone par plaque.
 
 Lino fait ce découpage. Vous choisissez le **nombre de couleurs** (de 2 à 16) ; Lino regroupe les couleurs de
 l'image en autant de familles et en tire un **calque** par famille. Chaque calque reçoit une **teinte d'encre**,
-choisie dans une bibliothèque d'encres de linogravure. Les calques s'exportent en noir et blanc : le noir est ce qui
+choisie dans une bibliothèque d'encres : les 24 couleurs de l'encre **Aqua Wash 60 ml** de Rougier & Plé, avec leur référence. Les calques s'exportent en noir et blanc : le noir est ce qui
 reçoit l'encre, le blanc ce qui sera creusé.
 
 C'est un outil personnel : pas de compte, pas de serveur, rien à installer.
@@ -163,18 +163,24 @@ Les teintes sont dans `public/palettes/*.json`. Format :
 
 ```json
 {
-  "id": "linocut-inks",
-  "name": "Encres de linogravure",
+  "id": "aqua-wash-60ml",
+  "name": "Encre Aqua Wash 60 ml",
   "swatches": [
-    { "id": "noir", "name": "Noir", "hex": "#16161a" },
-    { "id": "rouge-vermillon", "name": "Rouge vermillon", "hex": "#d93a26", "ref": "R-01" }
+    { "id": "blanc-de-titane", "name": "Blanc de titane", "hex": "#fffffd", "ref": "490488" },
+    { "id": "bleu-ocean", "name": "Bleu océan", "hex": "#1a3982", "ref": "490479" }
   ]
 }
 ```
 
 `id` est unique dans la palette, `hex` s'écrit `#rrggbb`, `ref` (référence d'encre) est facultatif. `parsePalette`
-rejette une palette invalide avec un message « Palette invalide : … ». L'application charge `linocut-inks.json`.
-La teinte proposée pour un calque est la plus proche de son centroïde, mesurée dans Lab.
+rejette une palette invalide avec un message « Palette invalide : … ». L'application charge `linocut-inks.json`
+(le nom du fichier est resté, son contenu est la palette Aqua Wash) ; un test vérifie que cette palette est valide,
+complète et que les références sont uniques. La teinte proposée pour un calque est la plus proche de son centroïde,
+mesurée dans Lab.
+
+Les codes `hex` ont été relevés sur les pastilles de couleur du site du fournisseur (rendu à l'écran) : ils donnent
+une bonne approximation, pas une mesure de l'encre imprimée. Plusieurs noirs ont la même valeur (`#000000` ou `#171717`) ;
+à couleur égale, la première teinte de la liste est proposée.
 
 ## Persistance
 
