@@ -116,6 +116,7 @@ export function App() {
 
   useEffect(() => {
     client.cancel();
+    setBusy(false);
     setImage(null);
     setResult(null);
     if (!source) return;
