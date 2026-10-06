@@ -14,13 +14,13 @@ Application 100 % client : les images ne quittent jamais l'appareil.
 
 Dans le panneau de droite : nombre de couleurs, luminosité, contraste, saturation, lissage du grain, nettoyage des points isolés, définition maximale, inversion des valeurs et miroir horizontal (utile pour graver). Les réglages sont enregistrés avec le projet.
 
-## Déploiement (Cloudflare Pages)
+## Déploiement (GitHub Pages)
 
-- Build command : `npm run build`
-- Output directory : `dist`
-- Variable d'environnement : `NODE_VERSION=20`
+Chaque push sur `main` lance `.github/workflows/deploy.yml` : tests, build puis publication sur `https://<compte>.github.io/<dépôt>/`.
 
-Chaque push sur la branche principale déclenche un déploiement; les autres branches obtiennent une prévisualisation.
+Activation (une seule fois) : dans le dépôt GitHub, *Settings*, *Pages*, *Build and deployment*, *Source* : **GitHub Actions**.
+
+Le build lit la variable `BASE_PATH` (le workflow la fixe à `/<dépôt>/`). Sans elle, le site est servi à la racine, comme en local.
 
 ## Teintes
 
