@@ -1,0 +1,22 @@
+{
+  "id": "linocut-inks",
+  "name": "Encres de linogravure",
+  "swatches": [
+    { "id": "noir", "name": "Noir", "hex": "#16161a" },
+    { "id": "blanc", "name": "Blanc", "hex": "#f6f3ec" },
+    { "id": "rouge-vermillon", "name": "Rouge vermillon", "hex": "#d93a26" },
+    { "id": "rouge-carmin", "name": "Rouge carmin", "hex": "#9e1b32" },
+    { "id": "orange", "name": "Orange", "hex": "#ee7d1f" },
+    { "id": "jaune-citron", "name": "Jaune citron", "hex": "#f2d21b" },
+    { "id": "ocre", "name": "Ocre", "hex": "#c08a2e" },
+    { "id": "vert-sapin", "name": "Vert sapin", "hex": "#1f5a3d" },
+    { "id": "vert-tilleul", "name": "Vert tilleul", "hex": "#8fae3a" },
+    { "id": "turquoise", "name": "Turquoise", "hex": "#1aa6a6" },
+    { "id": "bleu-outremer", "name": "Bleu outremer", "hex": "#2438a8" },
+    { "id": "bleu-ciel", "name": "Bleu ciel", "hex": "#7fb4e0" },
+    { "id": "violet", "name": "Violet", "hex": "#6a3a8c" },
+    { "id": "rose", "name": "Rose", "hex": "#e68aa8" },
+    { "id": "brun", "name": "Brun", "hex": "#5c3b24" },
+    { "id": "gris", "name": "Gris", "hex": "#8a8a8c" }
+  ]
+}
