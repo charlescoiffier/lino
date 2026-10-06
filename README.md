@@ -10,6 +10,10 @@ Application 100 % client : les images ne quittent jamais l'appareil.
     npm test           # tests unitaires (Vitest)
     npm run e2e        # tests de bout en bout (Playwright)
 
+## Réglages de l'image
+
+Dans le panneau de droite : nombre de couleurs, luminosité, contraste, saturation, lissage du grain, nettoyage des points isolés, définition maximale, inversion des valeurs et miroir horizontal (utile pour graver). Les réglages sont enregistrés avec le projet.
+
 ## Déploiement (Cloudflare Pages)
 
 - Build command : `npm run build`

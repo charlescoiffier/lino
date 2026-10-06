@@ -5,9 +5,10 @@ interface Props {
   width: number;
   height: number;
   label: string;
+  className?: string;
 }
 
-export function RgbaCanvas({ data, width, height, label }: Props) {
+export function RgbaCanvas({ data, width, height, label, className }: Props) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -17,5 +18,5 @@ export function RgbaCanvas({ data, width, height, label }: Props) {
     canvas.height = height;
     ctx.putImageData(new ImageData(data as Uint8ClampedArray<ArrayBuffer>, width, height), 0, 0);
   }, [data, width, height]);
-  return <canvas ref={ref} role="img" aria-label={label} style={{ maxWidth: '100%', height: 'auto', background: '#fff' }} />;
+  return <canvas ref={ref} role="img" aria-label={label} className={className} />;
 }

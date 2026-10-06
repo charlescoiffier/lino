@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { DEFAULT_SETTINGS, normalizeSettings, type Settings } from '../core/adjust';
 import { layerMasks } from '../core/layers';
 import { hexToRgb, loadPalette, nearestSwatch, type Palette } from '../core/palette';
 import type { ProcessResult } from '../core/pipeline';
-import { MAX_COLORS, MIN_COLORS } from '../core/quantize';
 import { compositeRgba, maskRgba } from '../core/render';
 import type { RgbaImage } from '../core/types';
-import { listProjects, loadProject, projectFromFile, projectToFile, saveProject, type Project } from '../store/projects';
+import { deleteProject, listProjects, loadProject, projectFromFile, projectToFile, saveProject, type Project } from '../store/projects';
 import { CancelledError, ProcessingClient, type WorkerLike } from '../workers/client';
 import { downloadBlob, rgbaToPngBlob } from './export';
+import { Icon } from './Icon';
 import { LayerCard } from './LayerCard';
 import { loadImage } from './loadImage';
-import { ProjectBar } from './ProjectBar';
 import { RgbaCanvas } from './RgbaCanvas';
+import { SettingsPanel } from './SettingsPanel';
+import { Sidebar } from './Sidebar';
 
 export interface Source {
   name: string;
@@ -20,20 +22,113 @@ export interface Source {
 }
 
 const PALETTE_URL = `${import.meta.env.BASE_URL}palettes/linocut-inks.json`;
+const SETTINGS_DEBOUNCE_MS = 150;
 
 export function App() {
   const [source, setSource] = useState<Source | null>(null);
   const [image, setImage] = useState<RgbaImage | null>(null);
   const [n, setN] = useState(4);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [applied, setApplied] = useState<Settings>(DEFAULT_SETTINGS);
   const [result, setResult] = useState<ProcessResult | null>(null);
   const [palette, setPalette] = useState<Palette | null>(null);
   const [swatchIds, setSwatchIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const pendingIds = useRef<string[] | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [storageAvailable, setStorageAvailable] = useState(true);
+  const pendingIds = useRef<string[] | null>(null);
+  // Teintes choisies à la main (par position de calque) : conservées quand un réglage change sans changer le nombre de calques.
+  const manualIds = useRef<Map<number, string>>(new Map());
+  const lastCount = useRef(0);
+
+  const client = useMemo(
+    () =>
+      new ProcessingClient(
+        () => new Worker(new URL('../workers/process.worker.ts', import.meta.url), { type: 'module' }) as unknown as WorkerLike,
+      ),
+    [],
+  );
+  useEffect(() => () => client.cancel(), [client]);
+
+  useEffect(() => {
+    loadPalette(PALETTE_URL).then(setPalette, (e: Error) => setError(e.message));
+  }, []);
+
+  // Les curseurs réagissent tout de suite, le recalcul attend une courte pause.
+  useEffect(() => {
+    const t = setTimeout(() => setApplied(settings), SETTINGS_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [settings]);
+
+  const { brightness, contrast, saturation, blur, cleanup, invert, mirror, definition } = applied;
+  // La définition agit au chargement de l'image, pas dans le worker.
+  const processSettings = useMemo<Settings>(
+    () => ({ brightness, contrast, saturation, blur, cleanup, invert, mirror, definition: DEFAULT_SETTINGS.definition }),
+    [brightness, contrast, saturation, blur, cleanup, invert, mirror],
+  );
+
+  useEffect(() => {
+    client.cancel();
+    setBusy(false);
+    setImage(null);
+    setResult(null);
+    if (!source) return;
+    let live = true;
+    loadImage(new File([source.bytes], source.name, { type: source.type }), definition).then(
+      (img) => {
+        if (live) {
+          setError(null);
+          setImage(img);
+        }
+      },
+      (e: Error) => {
+        if (live) setError(e.message);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [source, definition, client]);
+
+  useEffect(() => {
+    if (!image) return;
+    let live = true;
+    setBusy(true);
+    client.run(image, n, processSettings).then(
+      (r) => {
+        if (!live) return;
+        setError(null);
+        setResult(r);
+        setBusy(false);
+      },
+      (e: Error) => {
+        if (e instanceof CancelledError || !live) return;
+        setError(e.message);
+        setBusy(false);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [image, n, processSettings, client]);
+
+  useEffect(() => {
+    if (!result || !palette) return;
+    const count = result.centroidsRgb.length;
+    const pending = pendingIds.current;
+    pendingIds.current = null;
+    if (pending) manualIds.current = new Map(pending.map((id, i) => [i, id]));
+    else if (count !== lastCount.current) manualIds.current.clear();
+    lastCount.current = count;
+    setSwatchIds(
+      result.centroidsRgb.map((rgb, i) => {
+        const wanted = manualIds.current.get(i);
+        return wanted && palette.swatches.some((s) => s.id === wanted) ? wanted : nearestSwatch(palette.swatches, rgb).id;
+      }),
+    );
+  }, [result, palette]);
 
   async function refreshProjects() {
     try {
@@ -47,6 +142,22 @@ export function App() {
     refreshProjects();
   }, []);
 
+  const masks = useMemo(() => (result ? layerMasks(result.indices, result.centroidsRgb.length) : []), [result]);
+  const ready = result && palette && swatchIds.length === masks.length;
+  const colors = useMemo(
+    () => (palette ? swatchIds.map((id) => hexToRgb(palette.swatches.find((s) => s.id === id)?.hex ?? '#000000')) : []),
+    [palette, swatchIds],
+  );
+  const composite = useMemo(() => (ready ? compositeRgba(result.indices, colors) : null), [ready, result, colors]);
+
+  async function onAddImage(file: File) {
+    manualIds.current.clear();
+    lastCount.current = 0;
+    pendingIds.current = null;
+    setProjectId(null);
+    setSource({ name: file.name, type: file.type, bytes: await file.arrayBuffer() });
+  }
+
   function currentProject(): Project | null {
     if (!source || !result) return null;
     return {
@@ -56,14 +167,18 @@ export function App() {
       imageType: source.type,
       n,
       swatchIds,
+      settings,
       updatedAt: Date.now(),
     };
   }
 
   function applyProject(p: Project) {
+    const restored = normalizeSettings(p.settings);
     pendingIds.current = p.swatchIds;
     setProjectId(p.id);
     setN(p.n);
+    setSettings(restored);
+    setApplied(restored);
     setSource({ name: p.name, type: p.imageType, bytes: p.imageBytes });
   }
 
@@ -88,6 +203,16 @@ export function App() {
     }
   }
 
+  async function onDelete(id: string) {
+    try {
+      await deleteProject(id);
+      if (id === projectId) setProjectId(null);
+      await refreshProjects();
+    } catch {
+      setStorageAvailable(false);
+    }
+  }
+
   function onExportFile() {
     const p = currentProject();
     if (p) downloadBlob(projectToFile(p), `${p.name.replace(/\.[^.]+$/, '')}.lino.json`);
@@ -99,89 +224,6 @@ export function App() {
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Fichier projet invalide.');
     }
-  }
-
-  const client = useMemo(
-    () =>
-      new ProcessingClient(
-        () => new Worker(new URL('../workers/process.worker.ts', import.meta.url), { type: 'module' }) as unknown as WorkerLike,
-      ),
-    [],
-  );
-  useEffect(() => () => client.cancel(), [client]);
-
-  useEffect(() => {
-    loadPalette(PALETTE_URL).then(setPalette, (e: Error) => setError(e.message));
-  }, []);
-
-  useEffect(() => {
-    client.cancel();
-    setBusy(false);
-    setImage(null);
-    setResult(null);
-    if (!source) return;
-    let live = true;
-    loadImage(new File([source.bytes], source.name, { type: source.type })).then(
-      (img) => {
-        if (live) {
-          setError(null);
-          setImage(img);
-        }
-      },
-      (e: Error) => {
-        if (live) setError(e.message);
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [source, client]);
-
-  useEffect(() => {
-    if (!image) return;
-    let live = true;
-    setBusy(true);
-    client.run(image, n).then(
-      (r) => {
-        if (!live) return;
-        setError(null);
-        setResult(r);
-        setBusy(false);
-      },
-      (e: Error) => {
-        if (e instanceof CancelledError || !live) return;
-        setError(e.message);
-        setBusy(false);
-      },
-    );
-    return () => {
-      live = false;
-    };
-  }, [image, n, client]);
-
-  useEffect(() => {
-    if (!result || !palette) return;
-    const pending = pendingIds.current;
-    pendingIds.current = null;
-    setSwatchIds(
-      result.centroidsRgb.map((rgb, i) => {
-        const wanted = pending?.[i];
-        return wanted && palette.swatches.some((s) => s.id === wanted) ? wanted : nearestSwatch(palette.swatches, rgb).id;
-      }),
-    );
-  }, [result, palette]);
-
-  const masks = useMemo(() => (result ? layerMasks(result.indices, result.centroidsRgb.length) : []), [result]);
-  const ready = result && palette && swatchIds.length === masks.length;
-  const colors = useMemo(
-    () => (palette ? swatchIds.map((id) => hexToRgb(palette.swatches.find((s) => s.id === id)?.hex ?? '#000000')) : []),
-    [palette, swatchIds],
-  );
-  const composite = useMemo(() => (ready ? compositeRgba(result.indices, colors) : null), [ready, result, colors]);
-
-  async function onFile(file: File | undefined) {
-    if (!file) return;
-    setSource({ name: file.name, type: file.type, bytes: await file.arrayBuffer() });
   }
 
   async function exportLayer(k: number) {
@@ -196,69 +238,93 @@ export function App() {
   }
 
   return (
-    <main style={{ maxWidth: 1100, margin: '0 auto', padding: 16, fontFamily: 'system-ui, sans-serif' }}>
-      <h1>Lino</h1>
-      {error && (
-        <p role="alert" style={{ color: '#b00020' }}>
-          {error}
-        </p>
-      )}
-      <ProjectBar
+    <div className="app">
+      <Sidebar
         projects={projects}
+        activeId={projectId}
         canSave={Boolean(ready)}
         storageAvailable={storageAvailable}
+        onAddImage={onAddImage}
         onSave={onSave}
         onOpen={onOpen}
+        onDelete={onDelete}
         onExportFile={onExportFile}
         onImportFile={onImportFile}
       />
-      <section style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-        <label>
-          Image{' '}
-          <input data-testid="file-input" type="file" accept="image/*" onChange={(e) => onFile(e.target.files?.[0])} />
-        </label>
-        <label>
-          Nombre de couleurs : {n}{' '}
-          <input
-            type="range"
-            aria-label="Nombre de couleurs"
-            min={MIN_COLORS}
-            max={MAX_COLORS}
-            value={n}
-            onChange={(e) => setN(Number(e.target.value))}
-          />
-        </label>
-        {busy && <span>Calcul…</span>}
-      </section>
-      {ready && composite && (
-        <>
-          <section>
-            <h2>Aperçu</h2>
-            <RgbaCanvas data={composite} width={result.width} height={result.height} label="Aperçu final" />
-            <button type="button" onClick={exportComposite}>
-              Exporter l'aperçu
-            </button>
-          </section>
-          <section>
-            <h2>Calques</h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12 }}>
-              {masks.map((mask, k) => (
-                <LayerCard
-                  key={k}
-                  position={k + 1}
-                  mask={mask}
-                  width={result.width}
-                  height={result.height}
-                  swatches={palette.swatches}
-                  swatchId={swatchIds[k]}
-                  onSwatchChange={(id) => setSwatchIds((prev) => prev.map((p, i) => (i === k ? id : p)))}
-                  onExport={() => exportLayer(k)}
-                />
-              ))}
+
+      <main className="content">
+        <header className="content-head">
+          <h1>{source ? source.name : 'Lino'}</h1>
+          {busy && <span className="busy">Calcul…</span>}
+        </header>
+
+        {error && (
+          <p role="alert" className="alert">
+            {error}
+          </p>
+        )}
+
+        {ready && composite ? (
+          <>
+            <section className="card">
+              <div className="section-head">
+                <h2>Aperçu</h2>
+                <button type="button" className="btn btn-secondary" onClick={exportComposite}>
+                  <Icon name="download" size={16} />
+                  Exporter l'aperçu
+                </button>
+              </div>
+              <RgbaCanvas data={composite} width={result.width} height={result.height} label="Aperçu final" className="preview" />
+            </section>
+
+            <section>
+              <div className="section-head">
+                <h2>Calques</h2>
+                <span className="count">{masks.length}</span>
+              </div>
+              <ul className="layers">
+                {masks.map((mask, k) => (
+                  <LayerCard
+                    key={k}
+                    position={k + 1}
+                    mask={mask}
+                    width={result.width}
+                    height={result.height}
+                    swatches={palette.swatches}
+                    swatchId={swatchIds[k]}
+                    onSwatchChange={(id) => {
+                      manualIds.current.set(k, id);
+                      setSwatchIds((prev) => prev.map((p, i) => (i === k ? id : p)));
+                    }}
+                    onExport={() => exportLayer(k)}
+                  />
+                ))}
+              </ul>
+            </section>
+          </>
+        ) : (
+          !source &&
+          !error && (
+            <div className="empty">
+              <Icon name="image" size={40} />
+              <h2>Préparez votre linogravure</h2>
+              <p>Ajoutez une image : Lino la sépare en calques, un par passage d'encre.</p>
             </div>
-          </section>
-        </>
-      )}
-    </main>
+          )
+        )}
+      </main>
+
+      <SettingsPanel
+        n={n}
+        onN={setN}
+        settings={settings}
+        onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
+        onReset={() => {
+          setSettings(DEFAULT_SETTINGS);
+          setApplied(DEFAULT_SETTINGS);
+          setN(4);
+        }}
+      />
+    </div>
   );
 }
