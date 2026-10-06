@@ -1,5 +1,6 @@
 import 'fake-indexeddb/auto';
 import { beforeEach, describe, expect, test } from 'vitest';
+import { DEFAULT_SETTINGS } from '../core/adjust';
 import { deleteProject, listProjects, loadProject, projectFromFile, projectToFile, saveProject, type Project } from './projects';
 
 const sample = (id: string, updatedAt = 1): Project => ({
@@ -44,6 +45,26 @@ describe('fichier projet', () => {
     expect(back.n).toBe(4);
     expect(back.swatchIds).toEqual(['noir', 'rouge-vermillon']);
     expect(Array.from(new Uint8Array(back.imageBytes))).toEqual([1, 2, 3, 250, 251]);
+  });
+
+  test('les réglages font l\'aller-retour', async () => {
+    const settings = { ...DEFAULT_SETTINGS, brightness: 25, invert: true, definition: 800 };
+    const back = await projectFromFile(projectToFile({ ...sample('a'), settings }));
+    expect(back.settings).toEqual(settings);
+  });
+
+  test('fichier sans réglages (ancienne version) -> réglages par défaut', async () => {
+    const legacy = JSON.stringify({
+      version: 1,
+      id: 'old',
+      name: 'old.png',
+      n: 3,
+      swatchIds: ['noir'],
+      updatedAt: 1,
+      imageType: 'image/png',
+      image: 'AQID',
+    });
+    expect((await projectFromFile(new Blob([legacy]))).settings).toEqual(DEFAULT_SETTINGS);
   });
 
   test.each([

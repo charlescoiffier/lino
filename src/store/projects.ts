@@ -1,4 +1,5 @@
 import { del, get, getMany, keys, set } from 'idb-keyval';
+import { normalizeSettings, type Settings } from '../core/adjust';
 
 export interface Project {
   id: string;
@@ -7,6 +8,8 @@ export interface Project {
   imageType: string;
   n: number;
   swatchIds: string[];
+  /** Absent dans les projets enregistrés avant l'ajout des réglages. */
+  settings?: Settings;
   updatedAt: number;
 }
 
@@ -45,6 +48,7 @@ export function projectToFile(p: Project): Blob {
     name: p.name,
     n: p.n,
     swatchIds: p.swatchIds,
+    settings: p.settings,
     updatedAt: p.updatedAt,
     imageType: p.imageType,
     image: toBase64(p.imageBytes),
@@ -75,7 +79,16 @@ export async function projectFromFile(blob: Blob): Promise<Project> {
     throw fail();
   }
   try {
-    return { id, name, n, swatchIds: swatchIds as string[], updatedAt, imageType, imageBytes: fromBase64(image) };
+    return {
+      id,
+      name,
+      n,
+      swatchIds: swatchIds as string[],
+      settings: normalizeSettings(raw.settings),
+      updatedAt,
+      imageType,
+      imageBytes: fromBase64(image),
+    };
   } catch {
     throw fail();
   }
