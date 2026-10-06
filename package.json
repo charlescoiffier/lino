@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --port 4173",
     "test": "vitest run",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "capture:readme": "node scripts/capture-readme.mjs"
   },
   "dependencies": {
     "idb-keyval": "^6.2.1",
