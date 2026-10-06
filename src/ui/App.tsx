@@ -5,10 +5,12 @@ import type { ProcessResult } from '../core/pipeline';
 import { MAX_COLORS, MIN_COLORS } from '../core/quantize';
 import { compositeRgba, maskRgba } from '../core/render';
 import type { RgbaImage } from '../core/types';
+import { listProjects, loadProject, projectFromFile, projectToFile, saveProject, type Project } from '../store/projects';
 import { CancelledError, ProcessingClient, type WorkerLike } from '../workers/client';
 import { downloadBlob, rgbaToPngBlob } from './export';
 import { LayerCard } from './LayerCard';
 import { loadImage } from './loadImage';
+import { ProjectBar } from './ProjectBar';
 import { RgbaCanvas } from './RgbaCanvas';
 
 export interface Source {
@@ -29,6 +31,75 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const pendingIds = useRef<string[] | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [storageAvailable, setStorageAvailable] = useState(true);
+
+  async function refreshProjects() {
+    try {
+      setProjects(await listProjects());
+      setStorageAvailable(true);
+    } catch {
+      setStorageAvailable(false);
+    }
+  }
+  useEffect(() => {
+    refreshProjects();
+  }, []);
+
+  function currentProject(): Project | null {
+    if (!source || !result) return null;
+    return {
+      id: projectId ?? crypto.randomUUID(),
+      name: source.name,
+      imageBytes: source.bytes,
+      imageType: source.type,
+      n,
+      swatchIds,
+      updatedAt: Date.now(),
+    };
+  }
+
+  function applyProject(p: Project) {
+    pendingIds.current = p.swatchIds;
+    setProjectId(p.id);
+    setN(p.n);
+    setSource({ name: p.name, type: p.imageType, bytes: p.imageBytes });
+  }
+
+  async function onSave() {
+    const p = currentProject();
+    if (!p) return;
+    try {
+      await saveProject(p);
+      setProjectId(p.id);
+      await refreshProjects();
+    } catch {
+      setStorageAvailable(false);
+    }
+  }
+
+  async function onOpen(id: string) {
+    try {
+      const p = await loadProject(id);
+      if (p) applyProject(p);
+    } catch {
+      setStorageAvailable(false);
+    }
+  }
+
+  function onExportFile() {
+    const p = currentProject();
+    if (p) downloadBlob(projectToFile(p), `${p.name.replace(/\.[^.]+$/, '')}.lino.json`);
+  }
+
+  async function onImportFile(file: File) {
+    try {
+      applyProject(await projectFromFile(file));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Fichier projet invalide.');
+    }
+  }
 
   const client = useMemo(
     () =>
@@ -131,6 +202,15 @@ export function App() {
           {error}
         </p>
       )}
+      <ProjectBar
+        projects={projects}
+        canSave={Boolean(ready)}
+        storageAvailable={storageAvailable}
+        onSave={onSave}
+        onOpen={onOpen}
+        onExportFile={onExportFile}
+        onImportFile={onImportFile}
+      />
       <section style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
         <label>
           Image{' '}
