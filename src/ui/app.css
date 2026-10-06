@@ -322,6 +322,7 @@ label.nav-item {
   max-height: 480px;
   height: auto;
   margin: 16px auto 0;
+  border: 1px solid var(--border);
   border-radius: var(--radius);
   background: #fff;
 }
@@ -361,6 +362,8 @@ label.nav-item {
   height: 20px;
   border: 2px solid;
   border-radius: 50%;
+  /* Contour discret : une encre blanche resterait invisible sur le fond. */
+  box-shadow: 0 0 0 1px var(--border);
 }
 
 .layer-thumb {

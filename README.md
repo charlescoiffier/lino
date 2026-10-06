@@ -11,7 +11,7 @@ Aucune installation : tout se passe dans le navigateur, et vos images ne quitten
 
 ## Aperçu
 
-![Lino sur ordinateur : l'aperçu en couleurs, les quatre calques et le panneau de réglages](docs/images/apercu-bureau.png)
+![Lino sur ordinateur : l'aperçu en couleurs d'une cigale, ses quatre calques et le panneau de réglages](docs/images/apercu-bureau.png)
 
 | Les réglages de l'image | Mode sombre | Sur téléphone |
 |---|---|---|
@@ -213,5 +213,5 @@ tête de ce fichier reflète l'état du dernier run.
 ## Images du README
 
 `npm run capture:readme` (`scripts/capture-readme.mjs`) construit l'application, la sert avec `vite preview`, charge
-une image d'exemple fabriquée par le script et enregistre les captures (bureau, panneau de réglages, mode sombre,
+l'image d'exemple `scripts/assets/cigale.webp` et enregistre les captures (bureau, panneau de réglages, mode sombre,
 mobile) dans `docs/images/`. Les images sont versionnées.
