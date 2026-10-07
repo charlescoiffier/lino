@@ -313,7 +313,9 @@ label.nav-item {
 }
 
 .count {
+  margin-left: 4px;
   color: var(--muted);
+  font-weight: 400;
 }
 
 .card .preview {

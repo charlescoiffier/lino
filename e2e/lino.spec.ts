@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { PNG } from 'pngjs';
 
@@ -108,4 +109,26 @@ test('les réglages sont enregistrés avec le projet et teintes choisies conserv
   await expect(page.getByLabel('Contraste')).toHaveValue('20');
   await expect(page.getByLabel('Miroir horizontal')).toBeChecked();
   await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('gris-payne');
+});
+
+test('exporter tous les calques dans un seul PDF multipages', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('file-input').setInputFiles({ name: 'quad.png', mimeType: 'image/png', buffer: quadrantsPng() });
+  await expect(page.getByTestId('layer-card')).toHaveCount(4);
+  await page.getByLabel('Teinte du calque 2').selectOption({ label: 'Sanguine' });
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Exporter tous les calques (PDF)' }).click(),
+  ]);
+  expect(download.suggestedFilename()).toBe('quad-calques.pdf');
+
+  const path = await download.path();
+  const text = readFileSync(path).toString('latin1');
+  expect(text.startsWith('%PDF-')).toBe(true);
+  expect(text.match(/\/Type \/Page\b(?!s)/g)).toHaveLength(4);
+  expect(text).toContain('/Count 4');
+  expect(text).toContain('(Calque 2/4 · Sanguine · réf. 490483)');
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Exporter tous les calques (PDF)' })).toBeEnabled();
 });

@@ -66,6 +66,10 @@ Les calques sont triés du plus clair (calque 1) au plus sombre. Chaque ligne in
 ### Enregistrer et exporter
 
 - **Exporter le calque K** : un PNG noir et blanc nommé `calque-K.png` (noir = encre).
+- **Exporter tous les calques (PDF)** : un seul fichier `<nom>-calques.pdf`, une page A4 par calque (en portrait ou
+  en paysage selon l'image). Chaque page porte une légende avec la couleur de la teinte, son nom et sa référence
+  (par exemple « Calque 2/4 · Jaune foncé · réf. 490473 »). L'image est au même endroit sur toutes les pages, ce qui
+  aide à repérer les passages les uns sur les autres.
 - **Exporter l'aperçu** : un PNG en couleurs avec les teintes choisies, nommé `apercu.png`.
 - **Enregistrer** : garde le projet (image, nombre de couleurs, teintes, réglages) dans le navigateur. Les projets
   apparaissent dans la barre de gauche, où l'on peut les rouvrir ou les supprimer.
@@ -122,6 +126,7 @@ serveur. Pas de bibliothèque de composants ni de CSS-in-JS : une seule feuille 
 | `src/core/pipeline.ts` | `processImage` : réglages → quantification → nettoyage. Appelé par le worker. |
 | `src/core/palette.ts` | Chargement et validation d'une palette JSON, teinte la plus proche. |
 | `src/core/render.ts` | RGBA de l'aperçu (`compositeRgba`) et des masques (`maskRgba`). |
+| `src/core/pdf.ts` | Export PDF multipages (`layersToPdf`) : écrit le fichier à la main, sans bibliothèque. |
 | `src/workers/` | `process.worker.ts` (enveloppe du pipeline), `protocol.ts` (messages), `client.ts` (`ProcessingClient`, annulable). |
 | `src/store/projects.ts` | IndexedDB (projets) et fichier projet (export / import). |
 | `src/ui/` | `App.tsx` (état et composition), `Sidebar.tsx`, `SettingsPanel.tsx`, `LayerCard.tsx`, `RgbaCanvas.tsx`, `Icon.tsx`, `loadImage.ts`, `export.ts`, `app.css`. |
@@ -148,6 +153,20 @@ Les tests unitaires (`*.test.ts`) sont à côté du code qu'ils testent.
    voisins. Le réglage « nettoyage » répète cette passe 0 à 3 fois.
 
 `layerMasks` produit ensuite un masque par calque : les masques sont disjoints et leur union couvre l'image.
+
+## Export PDF
+
+`layersToPdf` (`src/core/pdf.ts`) écrit le PDF directement, sans bibliothèque : les calques étant des masques binaires,
+chaque page contient une **image 1 bit** (`packMask`, 1 pixel = 1 bit, noir = encre) compressée en Flate avec
+`CompressionStream` du navigateur (stockée telle quelle si l'API manque). Un PDF de 16 calques de 1600 px pèse une
+centaine de Ko et se génère en moins d'une seconde. Le fichier est une structure PDF 1.4 classique : catalogue, liste des
+pages, police Helvetica (légendes en Latin-1), puis trois objets par page (page, contenu, image) et la table `xref`.
+
+`pageLayout` choisit le format de page : A4 en paysage si l'image est plus large que haute, en portrait sinon ; l'image
+est mise à l'échelle pour tenir dans les marges (36 pt) sous la légende et centrée. Le placement ne dépend que des
+dimensions de l'image, donc tous les calques tombent au même endroit. Les caractères hors Latin-1 d'une légende sont
+remplacés par « ? ». L'interface (`exportPdf` dans `App.tsx`) compose les légendes à partir des teintes choisies et
+télécharge le fichier.
 
 ## Worker et annulation
 
@@ -194,9 +213,10 @@ mode sans sauvegarde et le signale dans la barre latérale.
 
 - **Vitest** (`npm test`) : couleur, quantification (nombre de calques, transparence, image unie, N hors bornes),
   réglages, calques (masques disjoints couvrant l'image), palettes, client de worker (annulation, réponses périmées),
-  redimensionnement, projets (IndexedDB simulée, fichier projet).
+  redimensionnement, projets (IndexedDB simulée, fichier projet), export PDF (bit à bit, table `xref`, images relues
+  après décompression, échappement des légendes).
 - **Playwright** (`npm run e2e`) : charger une image, séparer en 4 calques, changer N, attribuer des teintes, exporter,
-  fichier qui n'est pas une image, enregistrer puis rouvrir un projet, réglages et réinitialisation.
+  fichier qui n'est pas une image, enregistrer puis rouvrir un projet, réglages et réinitialisation, export PDF multipages.
 
 ## Publication
 

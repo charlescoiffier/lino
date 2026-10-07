@@ -3,6 +3,7 @@ import { DEFAULT_SETTINGS, normalizeSettings, type Settings } from '../core/adju
 import { layerMasks } from '../core/layers';
 import { hexToRgb, loadPalette, nearestSwatch, type Palette } from '../core/palette';
 import type { ProcessResult } from '../core/pipeline';
+import { layersToPdf } from '../core/pdf';
 import { compositeRgba, maskRgba } from '../core/render';
 import type { RgbaImage } from '../core/types';
 import { deleteProject, listProjects, loadProject, projectFromFile, projectToFile, saveProject, type Project } from '../store/projects';
@@ -35,6 +36,7 @@ export function App() {
   const [swatchIds, setSwatchIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [pdfBusy, setPdfBusy] = useState(false);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [storageAvailable, setStorageAvailable] = useState(true);
@@ -232,6 +234,31 @@ export function App() {
     downloadBlob(blob, `calque-${k + 1}.png`);
   }
 
+  async function exportPdf() {
+    if (!result || !palette || !source) return;
+    const base = source.name.replace(/\.[^.]+$/, '');
+    setPdfBusy(true);
+    try {
+      const pages = masks.map((mask, k) => {
+        const swatch = palette.swatches.find((sw) => sw.id === swatchIds[k]);
+        const label = swatch ? `${swatch.name}${swatch.ref ? ` \u00b7 r\u00e9f. ${swatch.ref}` : ''}` : '';
+        return {
+          mask,
+          width: result.width,
+          height: result.height,
+          caption: `Calque ${k + 1}/${masks.length}${label ? ` \u00b7 ${label}` : ''}`,
+          color: colors[k],
+        };
+      });
+      const bytes = await layersToPdf(pages, { title: `${base} \u00b7 calques` });
+      downloadBlob(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }), `${base}-calques.pdf`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Impossible de créer le PDF.");
+    } finally {
+      setPdfBusy(false);
+    }
+  }
+
   async function exportComposite() {
     if (!result || !composite) return;
     downloadBlob(await rgbaToPngBlob(composite, result.width, result.height), 'apercu.png');
@@ -279,8 +306,13 @@ export function App() {
 
             <section>
               <div className="section-head">
-                <h2>Calques</h2>
-                <span className="count">{masks.length}</span>
+                <h2>
+                  Calques <span className="count">{masks.length}</span>
+                </h2>
+                <button type="button" className="btn btn-secondary" disabled={pdfBusy} onClick={exportPdf}>
+                  <Icon name="download" size={16} />
+                  {pdfBusy ? 'Création du PDF…' : 'Exporter tous les calques (PDF)'}
+                </button>
               </div>
               <ul className="layers">
                 {masks.map((mask, k) => (
