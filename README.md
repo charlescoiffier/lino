@@ -3,7 +3,8 @@
 [![Build et déploiement](https://github.com/charlescoiffier/lino/actions/workflows/deploy.yml/badge.svg)](https://github.com/charlescoiffier/lino/actions/workflows/deploy.yml)
 
 Une application web qui prépare une image pour la **linogravure** : elle la sépare en calques, un par passage
-d'encre, attribue une teinte à chacun et exporte les calques en noir et blanc, prêts à imprimer ou à transférer sur le lino.
+d'encre, attribue une teinte à chacun et exporte les calques en noir et blanc (en PNG, ou en un PDF multipages avec
+repères de calage), prêts à imprimer ou à transférer sur le lino.
 
 **Essayer l'application : https://charlescoiffier.github.io/lino/**
 
@@ -15,7 +16,7 @@ Aucune installation : tout se passe dans le navigateur, et vos images ne quitten
 
 | Les réglages de l'image | Mode sombre | Sur téléphone |
 |---|---|---|
-| ![Le panneau de réglages : nombre de couleurs, luminosité, contraste, saturation, lissage, nettoyage, définition, inversion, miroir](docs/images/reglages.png) | ![Lino en mode sombre](docs/images/apercu-sombre.png) | ![Lino sur téléphone, en une seule colonne](docs/images/mobile.png) |
+| ![Le panneau de réglages : nombre de couleurs, luminosité, contraste, saturation, lissage, nettoyage, définition, inversion, miroir, largeur de l'image en mm et repères de calage](docs/images/reglages.png) | ![Lino en mode sombre](docs/images/apercu-sombre.png) | ![Lino sur téléphone, en une seule colonne](docs/images/mobile.png) |
 
 ---
 
@@ -29,8 +30,9 @@ bien distinctes, une zone par plaque.
 
 Lino fait ce découpage. Vous choisissez le **nombre de couleurs** (de 2 à 16) ; Lino regroupe les couleurs de
 l'image en autant de familles et en tire un **calque** par famille. Chaque calque reçoit une **teinte d'encre**,
-choisie dans une bibliothèque d'encres : les 24 couleurs de l'encre **Aqua Wash 60 ml** de Rougier & Plé, avec leur référence. Les calques s'exportent en noir et blanc : le noir est ce qui
-reçoit l'encre, le blanc ce qui sera creusé.
+choisie dans une bibliothèque d'encres : les 24 couleurs de l'encre **Aqua Wash 60 ml** de Rougier & Plé, avec leur
+référence. Les calques s'exportent en noir et blanc, un PNG par calque ou tous ensemble dans un PDF : le noir est ce
+qui reçoit l'encre, le blanc ce qui sera creusé.
 
 C'est un outil personnel : pas de compte, pas de serveur, rien à installer.
 
@@ -43,7 +45,8 @@ C'est un outil personnel : pas de compte, pas de serveur, rien à installer.
 3. **Ajuster l'image de base** (voir plus bas) pour obtenir des zones plus nettes ou plus simples à graver.
 4. **Choisir une teinte par calque**. Lino propose d'abord l'encre la plus proche de la couleur du calque ; vous
    pouvez en changer. Votre choix est conservé quand vous modifiez ensuite un réglage sans changer le nombre de calques.
-5. **Exporter** : un bouton par calque, et un pour l'aperçu en couleurs.
+5. **Exporter** : un bouton par calque (PNG), un bouton pour tous les calques dans un PDF (taille d'impression et
+   repères de calage réglables dans la section Impression), et un pour l'aperçu en couleurs.
 
 Les calques sont triés du plus clair (calque 1) au plus sombre. Chaque ligne indique la part de l'image qu'elle couvre.
 
@@ -63,7 +66,8 @@ Les calques sont triés du plus clair (calque 1) au plus sombre. Chaque ligne in
 | Largeur de l'image (mm) | Taille de l'image sur le papier dans l'export PDF, de 1 à 2000 mm ; la hauteur suit les proportions. Vide : l'image est ajustée à une page A4. Le panneau indique la taille obtenue et le format de page choisi. |
 | Repères de calage dans le PDF | Ajoute une croix de repérage à chaque coin de l'image sur toutes les pages du PDF (activé par défaut). |
 
-« Réinitialiser les réglages » remet tout à zéro (et 4 couleurs).
+« Réinitialiser les réglages » remet tous les réglages à leur valeur par défaut : 4 couleurs, image inchangée,
+largeur d'impression automatique, repères de calage activés.
 
 ### Enregistrer et exporter
 
@@ -93,6 +97,8 @@ Les calques sont triés du plus clair (calque 1) au plus sombre. Chaque ligne in
 - Les pixels transparents d'une image PNG comptent comme du blanc.
 - Le PDF reprend la définition traitée (1600 px au plus) : agrandie à une grande largeur, l'image perd en finesse (la
   résolution effective de l'exemple 1600 px sur 400 mm est d'environ 100 ppi).
+- Dans le PDF, les légendes n'acceptent que les caractères Latin-1 (les accents français passent) ; tout autre
+  caractère devient « ? ».
 - Pas de vectorisation (SVG) dans cette version.
 
 ---
@@ -142,7 +148,9 @@ serveur. Pas de bibliothèque de composants ni de CSS-in-JS : une seule feuille 
 | `src/ui/` | `App.tsx` (état et composition), `Sidebar.tsx`, `SettingsPanel.tsx`, `LayerCard.tsx`, `RgbaCanvas.tsx`, `Icon.tsx`, `loadImage.ts`, `export.ts`, `app.css`. |
 | `public/palettes/` | Bibliothèques de teintes (JSON). |
 | `e2e/` | Tests Playwright. |
-| `scripts/capture-readme.mjs` | Génère les images du README. |
+| `scripts/capture-readme.mjs` | Génère les images du README (`scripts/assets/cigale.webp` est l'image d'exemple). |
+| `docs/images/` | Captures du README (générées). |
+| `.github/workflows/deploy.yml` | Tests, build et publication sur GitHub Pages. |
 | `docs/superpowers/` | Spécification de conception et plan d'implémentation de la version 1. |
 
 Les tests unitaires (`*.test.ts`) sont à côté du code qu'ils testent.
@@ -172,25 +180,35 @@ chaque page contient une **image 1 bit** (`packMask`, 1 pixel = 1 bit, noir = en
 centaine de Ko et se génère en moins d'une seconde. Le fichier est une structure PDF 1.4 classique : catalogue, liste des
 pages, police Helvetica (légendes en Latin-1), puis trois objets par page (page, contenu, image) et la table `xref`.
 
+### Disposition de la page
+
 `pageLayout(width, height, widthMm)` calcule la page de chaque calque :
+
 - **sans largeur** (`widthMm` nul) : A4, en paysage si l'image est plus large que haute, image mise à l'échelle pour
-  tenir dans les marges (48 pt) sous la légende ;
+  tenir dans les marges (`PAGE_MARGIN`, 48 pt) sous la légende ;
 - **avec une largeur** : l'image est placée à cette taille exacte (mm → points, 72 / 25,4), et la page est le plus petit
   format ISO (A4 à A0, orientation de l'image d'abord) où elle tient avec marges et légende ; au-delà de l'A0, la page est
   sur mesure. `tooLarge` signale une page de plus de 14 400 pt (200 pouces, limite des lecteurs PDF) : `layersToPdf` lève
   alors une `RangeError` et l'interface désactive le bouton.
 
 La disposition ne dépend que des dimensions de l'image et de la largeur, donc tous les calques tombent au même endroit.
+Elle renvoie aussi le format retenu et la taille imprimée, que le panneau de réglages affiche. La largeur est le réglage
+`printWidthMm` (0 = automatique, 2000 mm au plus).
 
-`registrationMarks(layout)` donne les centres des quatre **repères de calage** : un par coin du cadre de l'image, décalé
-de 20 pt vers l'extérieur en diagonale. Chaque repère est un cercle (rayon 5 pt) et deux traits (demi-longueur 9 pt), en noir à
-0,5 pt (`marksContent`). La marge de page (48 pt) et la hauteur réservée à la légende garantissent que les repères restent
-à plus de 6 mm du bord du papier et ne touchent pas la légende, quelle que soit la taille de l'image ; des tests le
-vérifient pour plusieurs formats. L'option `registrationMarks` de `layersToPdf` (réglage `registrationMarks`, activé par
-défaut, enregistré avec le projet) les désactive. La disposition renvoie aussi le format retenu et la taille imprimée, que le panneau de réglages affiche. La largeur est le réglage
-`printWidthMm` (0 = automatique, 2000 mm au plus), enregistré avec le projet comme les autres. Les caractères hors Latin-1
-d'une légende sont remplacés par « ? ». L'interface (`exportPdf` dans `App.tsx`) compose les légendes à partir des teintes
-choisies et télécharge le fichier.
+### Repères de calage
+
+`registrationMarks(layout)` donne les centres des quatre repères : un par coin du cadre de l'image, décalé de 20 pt vers
+l'extérieur en diagonale. Chaque repère est un cercle (rayon 5 pt) et deux traits (demi-longueur 9 pt), en noir à 0,5 pt
+(`marksContent`). La marge de page et la hauteur réservée à la légende garantissent que les repères restent à plus de
+6 mm du bord du papier et ne touchent pas la légende, quelle que soit la taille de l'image ; des tests le vérifient pour
+plusieurs formats. L'option `registrationMarks` de `layersToPdf` (réglage du même nom, activé par défaut, enregistré avec
+le projet) les désactive.
+
+### Légendes et interface
+
+Chaque page porte une légende (carré de la couleur de la teinte, « Calque 2/4 · nom · réf. … »). Les caractères hors
+Latin-1 sont remplacés par « ? ». L'interface (`exportPdf` dans `App.tsx`) compose les légendes à partir des teintes
+choisies et télécharge le fichier `<nom>-calques.pdf`.
 
 ## Worker et annulation
 
@@ -236,11 +254,13 @@ mode sans sauvegarde et le signale dans la barre latérale.
 ## Tests
 
 - **Vitest** (`npm test`) : couleur, quantification (nombre de calques, transparence, image unie, N hors bornes),
-  réglages, calques (masques disjoints couvrant l'image), palettes, client de worker (annulation, réponses périmées),
-  redimensionnement, projets (IndexedDB simulée, fichier projet), export PDF (bit à bit, table `xref`, images relues
-  après décompression, échappement des légendes, choix du format de page selon la largeur en mm, position des repères de calage).
+  réglages, calques (masques disjoints couvrant l'image), palettes (dont la palette livrée), client de worker
+  (annulation, réponses périmées), redimensionnement, projets (IndexedDB simulée, fichier projet) et export PDF : bits des
+  images, table `xref`, images relues après décompression, échappement des légendes, format de page selon la largeur
+  en mm, position des repères de calage.
 - **Playwright** (`npm run e2e`) : charger une image, séparer en 4 calques, changer N, attribuer des teintes, exporter,
-  fichier qui n'est pas une image, enregistrer puis rouvrir un projet, réglages et réinitialisation, export PDF multipages, largeur en mm (taille de l'image et format de page dans le fichier), repères de calage.
+  fichier qui n'est pas une image, enregistrer puis rouvrir un projet, réglages et réinitialisation, export PDF
+  multipages, largeur en mm (taille de l'image et format de page dans le fichier), repères de calage.
 
 ## Publication
 
