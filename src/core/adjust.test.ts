@@ -89,12 +89,19 @@ describe('normalizeSettings', () => {
   });
 
   test('valeurs hors bornes ramenées dans les bornes', () => {
-    const s = normalizeSettings({ brightness: 999, contrast: -999, blur: 40, cleanup: -2, definition: 50 });
-    expect(s).toMatchObject({ brightness: 100, contrast: -100, blur: 5, cleanup: 0, definition: 400 });
+    const s = normalizeSettings({ brightness: 999, contrast: -999, blur: 40, cleanup: -2, definition: 50, printWidthMm: 5000 });
+    expect(s).toMatchObject({ brightness: 100, contrast: -100, blur: 5, cleanup: 0, definition: 400, printWidthMm: 2000 });
+  });
+
+  test('largeur d\'impression : négative ou invalide -> 0 (automatique), décimale arrondie', () => {
+    expect(normalizeSettings({ printWidthMm: -5 }).printWidthMm).toBe(0);
+    expect(normalizeSettings({ printWidthMm: 'large' }).printWidthMm).toBe(0);
+    expect(normalizeSettings({ printWidthMm: 148.6 }).printWidthMm).toBe(149);
+    expect(DEFAULT_SETTINGS.printWidthMm).toBe(0);
   });
 
   test('valeurs valides conservées', () => {
-    const wanted = settings({ brightness: 12, invert: true, mirror: true, definition: 800, cleanup: 2 });
+    const wanted = settings({ brightness: 12, invert: true, mirror: true, definition: 800, cleanup: 2, printWidthMm: 210 });
     expect(normalizeSettings(wanted)).toEqual(wanted);
   });
 });

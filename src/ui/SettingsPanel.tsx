@@ -1,4 +1,5 @@
 import { SETTING_LIMITS, type Settings } from '../core/adjust';
+import { PT_PER_MM, type PageLayout } from '../core/pdf';
 import { MAX_COLORS, MIN_COLORS } from '../core/quantize';
 import { Icon } from './Icon';
 
@@ -8,6 +9,8 @@ interface Props {
   settings: Settings;
   onChange: (patch: Partial<Settings>) => void;
   onReset: () => void;
+  /** Disposition de la page PDF pour l'image courante (null tant qu'il n'y a pas de résultat). */
+  printLayout: PageLayout | null;
 }
 
 interface SliderProps {
@@ -36,7 +39,19 @@ function Slider({ id, label, value, min, max, step = 1, suffix = '', onChange }:
   );
 }
 
-export function SettingsPanel({ n, onN, settings, onChange, onReset }: Props) {
+function printInfo(layout: PageLayout | null, auto: boolean): { text: string; warning: boolean } {
+  if (!layout) return { text: "Utilisée pour l'export PDF. Vide : image ajustée à une page A4.", warning: false };
+  if (layout.tooLarge) return { text: 'Trop grand pour une page PDF : réduisez la largeur.', warning: true };
+  const size = `${Math.round(layout.imageWidthMm)} \u00d7 ${Math.round(layout.imageHeightMm)} mm`;
+  const page =
+    layout.format === 'sur mesure'
+      ? `sur mesure (${Math.round(layout.pageWidth / PT_PER_MM)} \u00d7 ${Math.round(layout.pageHeight / PT_PER_MM)} mm)`
+      : `${layout.format} ${layout.landscape ? 'paysage' : 'portrait'}`;
+  return { text: `Image imprim\u00e9e : ${size} \u00b7 page ${page}${auto ? ' (ajust\u00e9e \u00e0 la page)' : ''}.`, warning: false };
+}
+
+export function SettingsPanel({ n, onN, settings, onChange, onReset, printLayout }: Props) {
+  const info = printInfo(printLayout, settings.printWidthMm === 0);
   const L = SETTING_LIMITS;
   return (
     <aside className="settings" aria-label="Réglages">
@@ -74,6 +89,27 @@ export function SettingsPanel({ n, onN, settings, onChange, onReset }: Props) {
           Miroir horizontal
         </label>
         <p className="hint">Le miroir est utile pour graver : l'impression inverse l'image.</p>
+        <div className="field">
+          <div className="field-head">
+            <label htmlFor="print-width">Largeur de l'image (mm)</label>
+          </div>
+          <input
+            id="print-width"
+            className="input"
+            type="number"
+            inputMode="numeric"
+            min={L.printWidthMm.min}
+            max={L.printWidthMm.max}
+            step={L.printWidthMm.step}
+            placeholder="Auto (page A4)"
+            value={settings.printWidthMm || ''}
+            onChange={(e) => {
+              const v = Math.round(Number(e.target.value));
+              onChange({ printWidthMm: Number.isFinite(v) && v > 0 ? Math.min(L.printWidthMm.max, v) : 0 });
+            }}
+          />
+          <p className={info.warning ? 'hint is-warning' : 'hint'}>{info.text}</p>
+        </div>
       </section>
     </aside>
   );

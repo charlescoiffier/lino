@@ -1,6 +1,6 @@
 import { inflateSync } from 'node:zlib';
 import { describe, expect, test } from 'vitest';
-import { layersToPdf, packMask, pageLayout, type PdfLayerPage } from './pdf';
+import { layersToPdf, packMask, pageLayout, PT_PER_MM, type PdfLayerPage } from './pdf';
 
 const latin1 = (bytes: Uint8Array) => Buffer.from(bytes).toString('latin1');
 
@@ -48,6 +48,62 @@ describe('pageLayout', () => {
 
   test('deux calques de même taille tombent au même endroit', () => {
     expect(pageLayout(800, 600)).toEqual(pageLayout(800, 600));
+  });
+});
+
+describe('pageLayout avec une largeur en mm', () => {
+  test('sans largeur : A4 et image ajustée', () => {
+    const l = pageLayout(400, 300);
+    expect(l.format).toBe('A4');
+    expect(l.landscape).toBe(true);
+  });
+
+  test('l\'image est imprimée exactement à la largeur demandée, proportions conservées', () => {
+    const l = pageLayout(400, 300, 100);
+    expect(l.w / PT_PER_MM).toBeCloseTo(100, 6);
+    expect(l.h / PT_PER_MM).toBeCloseTo(75, 6);
+    expect(l.imageWidthMm).toBeCloseTo(100, 6);
+    expect(l.imageHeightMm).toBeCloseTo(75, 6);
+  });
+
+  test.each([
+    [100, 'A4'],
+    [180, 'A4'],
+    [250, 'A3'],
+    [380, 'A2'],
+    [560, 'A1'],
+    [800, 'A0'],
+  ])('image carrée de %i mm : plus petit format A où elle tient = %s', (mm, format) => {
+    expect(pageLayout(500, 500, mm).format).toBe(format);
+  });
+
+  test('image large : paysage d\'abord ; si seule la hauteur gêne, on passe au format supérieur', () => {
+    const l = pageLayout(400, 300, 250); // 250 x 187,5 mm : trop haut pour l'A4 paysage (210 mm de haut avec marges et légende)
+    expect(l.format).toBe('A3');
+    expect(l.landscape).toBe(true);
+  });
+
+  test('au-delà de l\'A0 : page sur mesure, image toujours dans les marges', () => {
+    const l = pageLayout(500, 500, 1500);
+    expect(l.format).toBe('sur mesure');
+    expect(l.tooLarge).toBe(false);
+    expect(l.x).toBeCloseTo(36, 6);
+    expect(l.x + l.w).toBeCloseTo(l.pageWidth - 36, 6);
+    expect(l.y + l.h).toBeLessThan(l.captionY);
+  });
+
+  test('page plus grande que ce qu\'un PDF accepte : tooLarge', () => {
+    expect(pageLayout(500, 500, 6000).tooLarge).toBe(true);
+  });
+
+  test('l\'image reste dans la page et sous la légende, quel que soit le format choisi', () => {
+    for (const mm of [30, 150, 200, 300, 450, 700, 1000]) {
+      const l = pageLayout(640, 480, mm);
+      expect(l.x).toBeGreaterThanOrEqual(36 - 1e-6);
+      expect(l.x + l.w).toBeLessThanOrEqual(l.pageWidth - 36 + 1e-6);
+      expect(l.y).toBeGreaterThanOrEqual(36 - 1e-6);
+      expect(l.y + l.h).toBeLessThanOrEqual(l.captionY + 1e-6);
+    }
   });
 });
 
@@ -108,5 +164,19 @@ describe('layersToPdf', () => {
   test('liste vide ou dimensions incohérentes -> RangeError', async () => {
     await expect(layersToPdf([])).rejects.toThrow(RangeError);
     await expect(layersToPdf([{ ...pages[0], mask: new Uint8Array(3) }])).rejects.toThrow(RangeError);
+  });
+
+  test('widthMm : la page et la taille de l\'image du fichier suivent la largeur demandée', async () => {
+    const text = latin1(await layersToPdf([page(40, 40, () => true)], { widthMm: 100 }));
+    // carré de 100 mm = 283,46 pt, sur une page A4 portrait
+    expect(text).toContain('/MediaBox [0 0 595.28 841.89]');
+    expect(text).toContain('q 283.46 0 0 283.46 ');
+    const big = latin1(await layersToPdf([page(40, 40, () => true)], { widthMm: 250 }));
+    expect(big).toContain('/MediaBox [0 0 841.89 1190.55]'); // A3 portrait
+    expect(big).toContain('q 708.66 0 0 708.66 ');
+  });
+
+  test('widthMm trop grand pour une page PDF -> RangeError', async () => {
+    await expect(layersToPdf([page(10, 10, () => true)], { widthMm: 6000 })).rejects.toThrow(RangeError);
   });
 });

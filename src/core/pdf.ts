@@ -11,6 +11,8 @@ export interface PdfLayerPage {
 
 export interface PdfOptions {
   title?: string;
+  /** Largeur de l'image sur le papier, en mm. 0 ou absent : image ajustée à une page A4. */
+  widthMm?: number;
 }
 
 export interface PageLayout {
@@ -23,27 +25,34 @@ export interface PageLayout {
   h: number;
   /** Ligne de base de la légende. */
   captionY: number;
+  /** Format de la page : « A4 » à « A0 », ou « sur mesure » quand l'image dépasse l'A0. */
+  format: string;
+  landscape: boolean;
+  /** Taille de l'image sur le papier. */
+  imageWidthMm: number;
+  imageHeightMm: number;
+  /** Vrai si la page dépasse la taille maximale qu'un lecteur PDF accepte (200 pouces). */
+  tooLarge: boolean;
 }
 
-const A4 = { short: 595.28, long: 841.89 };
+export const PT_PER_MM = 72 / 25.4;
 const MARGIN = 36;
 const CAPTION_BAND = 28;
 const CAPTION_SIZE = 11;
 const SWATCH = 10;
+const MAX_PAGE_PT = 14400;
+/** Formats ISO (côté court, côté long en mm), du plus petit au plus grand. */
+const FORMATS = [
+  ['A4', 210, 297],
+  ['A3', 297, 420],
+  ['A2', 420, 594],
+  ['A1', 594, 841],
+  ['A0', 841, 1189],
+] as const;
 
-/**
- * Page A4 en portrait ou en paysage selon le format de l'image ; l'image est mise à l'échelle pour tenir dans les
- * marges (sous la légende) et centrée. Deux calques de même taille tombent donc exactement au même endroit.
- */
-export function pageLayout(width: number, height: number): PageLayout {
-  const landscape = width > height;
-  const pageWidth = landscape ? A4.long : A4.short;
-  const pageHeight = landscape ? A4.short : A4.long;
+function place(pageWidth: number, pageHeight: number, w: number, h: number, format: string): PageLayout {
   const availW = pageWidth - 2 * MARGIN;
   const availH = pageHeight - 2 * MARGIN - CAPTION_BAND;
-  const scale = Math.min(availW / width, availH / height);
-  const w = width * scale;
-  const h = height * scale;
   return {
     pageWidth,
     pageHeight,
@@ -52,7 +61,48 @@ export function pageLayout(width: number, height: number): PageLayout {
     w,
     h,
     captionY: pageHeight - MARGIN - CAPTION_SIZE,
+    format,
+    landscape: pageWidth > pageHeight,
+    imageWidthMm: w / PT_PER_MM,
+    imageHeightMm: h / PT_PER_MM,
+    tooLarge: pageWidth > MAX_PAGE_PT || pageHeight > MAX_PAGE_PT,
   };
+}
+
+/**
+ * Disposition de la page d'un calque.
+ *
+ * - `widthMm` absent ou nul : page A4, en paysage si l'image est plus large que haute, et image mise à l'échelle pour
+ *   tenir dans les marges, sous la légende.
+ * - `widthMm` donné : l'image est imprimée à cette largeur (la hauteur suit les proportions) et la page est le plus
+ *   petit format A où elle tient avec ses marges (orientation de l'image d'abord), ou une page sur mesure au-delà de l'A0.
+ *
+ * L'image est centrée. Deux calques de même taille tombent donc exactement au même endroit.
+ */
+export function pageLayout(width: number, height: number, widthMm = 0): PageLayout {
+  const landscape = width > height;
+  if (!(widthMm > 0)) {
+    const short = FORMATS[0][1] * PT_PER_MM;
+    const long = FORMATS[0][2] * PT_PER_MM;
+    const pageWidth = landscape ? long : short;
+    const pageHeight = landscape ? short : long;
+    const scale = Math.min((pageWidth - 2 * MARGIN) / width, (pageHeight - 2 * MARGIN - CAPTION_BAND) / height);
+    return place(pageWidth, pageHeight, width * scale, height * scale, 'A4');
+  }
+
+  const w = widthMm * PT_PER_MM;
+  const h = (w * height) / width;
+  const needW = w + 2 * MARGIN;
+  const needH = h + 2 * MARGIN + CAPTION_BAND;
+  const orientations = landscape ? [true, false] : [false, true];
+  for (const [name, shortMm, longMm] of FORMATS) {
+    for (const land of orientations) {
+      const pageWidth = (land ? longMm : shortMm) * PT_PER_MM;
+      const pageHeight = (land ? shortMm : longMm) * PT_PER_MM;
+      if (needW <= pageWidth + 1e-6 && needH <= pageHeight + 1e-6) return place(pageWidth, pageHeight, w, h, name);
+    }
+  }
+  return place(needW, needH, w, h, 'sur mesure');
 }
 
 /** Masque (1 = encre) → bitmap 1 bit par pixel, lignes alignées sur l'octet. Bit 0 = noir (encre), 1 = blanc. */
@@ -133,7 +183,8 @@ export async function layersToPdf(pages: PdfLayerPage[], options: PdfOptions = {
     if (page.mask.length !== page.width * page.height || page.width < 1 || page.height < 1) {
       throw new RangeError(`Calque ${i + 1} : dimensions incohérentes.`);
     }
-    const layout = pageLayout(page.width, page.height);
+    const layout = pageLayout(page.width, page.height, options.widthMm);
+    if (layout.tooLarge) throw new RangeError("L'image est trop grande pour une page PDF : réduisez sa largeur.");
     const [r, g, b] = page.color.map((v) => num(v / 255));
     const textX = MARGIN + SWATCH + 6;
 

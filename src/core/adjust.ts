@@ -9,6 +9,8 @@ export interface Settings {
   invert: boolean;
   mirror: boolean;
   definition: number;
+  /** Largeur de l'image à l'impression (export PDF), en mm. 0 = ajustée à une page A4. */
+  printWidthMm: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -20,6 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   invert: false,
   mirror: false,
   definition: 1600,
+  printWidthMm: 0,
 };
 
 export const SETTING_LIMITS = {
@@ -29,6 +32,7 @@ export const SETTING_LIMITS = {
   blur: { min: 0, max: 5, step: 1 },
   cleanup: { min: 0, max: 3, step: 1 },
   definition: { min: 400, max: 1600, step: 100 },
+  printWidthMm: { min: 0, max: 2000, step: 1 },
 } as const;
 
 type NumericKey = keyof typeof SETTING_LIMITS;
@@ -52,6 +56,7 @@ export function normalizeSettings(raw: unknown): Settings {
     invert: typeof r.invert === 'boolean' ? r.invert : DEFAULT_SETTINGS.invert,
     mirror: typeof r.mirror === 'boolean' ? r.mirror : DEFAULT_SETTINGS.mirror,
     definition: numeric(r, 'definition'),
+    printWidthMm: numeric(r, 'printWidthMm'),
   };
 }
 

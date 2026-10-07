@@ -420,6 +420,7 @@ label.nav-item {
   color: var(--text);
 }
 
+.input,
 .select {
   padding: 6px 8px;
   border: 1px solid var(--border);
@@ -501,6 +502,14 @@ input[type='checkbox'] {
 .hint {
   color: var(--muted);
   font-size: 12px;
+}
+
+.hint.is-warning {
+  color: var(--danger);
+}
+
+.input {
+  width: 100%;
 }
 
 /* Écrans moyens : le panneau de réglages passe sous le contenu */

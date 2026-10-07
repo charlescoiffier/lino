@@ -3,7 +3,7 @@ import { DEFAULT_SETTINGS, normalizeSettings, type Settings } from '../core/adju
 import { layerMasks } from '../core/layers';
 import { hexToRgb, loadPalette, nearestSwatch, type Palette } from '../core/palette';
 import type { ProcessResult } from '../core/pipeline';
-import { layersToPdf } from '../core/pdf';
+import { layersToPdf, pageLayout } from '../core/pdf';
 import { compositeRgba, maskRgba } from '../core/render';
 import type { RgbaImage } from '../core/types';
 import { deleteProject, listProjects, loadProject, projectFromFile, projectToFile, saveProject, type Project } from '../store/projects';
@@ -67,7 +67,7 @@ export function App() {
   const { brightness, contrast, saturation, blur, cleanup, invert, mirror, definition } = applied;
   // La définition agit au chargement de l'image, pas dans le worker.
   const processSettings = useMemo<Settings>(
-    () => ({ brightness, contrast, saturation, blur, cleanup, invert, mirror, definition: DEFAULT_SETTINGS.definition }),
+    () => ({ brightness, contrast, saturation, blur, cleanup, invert, mirror, definition: DEFAULT_SETTINGS.definition, printWidthMm: DEFAULT_SETTINGS.printWidthMm }),
     [brightness, contrast, saturation, blur, cleanup, invert, mirror],
   );
 
@@ -149,6 +149,10 @@ export function App() {
   const colors = useMemo(
     () => (palette ? swatchIds.map((id) => hexToRgb(palette.swatches.find((s) => s.id === id)?.hex ?? '#000000')) : []),
     [palette, swatchIds],
+  );
+  const printLayout = useMemo(
+    () => (result ? pageLayout(result.width, result.height, settings.printWidthMm) : null),
+    [result, settings.printWidthMm],
   );
   const composite = useMemo(() => (ready ? compositeRgba(result.indices, colors) : null), [ready, result, colors]);
 
@@ -250,7 +254,7 @@ export function App() {
           color: colors[k],
         };
       });
-      const bytes = await layersToPdf(pages, { title: `${base} \u00b7 calques` });
+      const bytes = await layersToPdf(pages, { title: `${base} \u00b7 calques`, widthMm: settings.printWidthMm });
       downloadBlob(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }), `${base}-calques.pdf`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Impossible de créer le PDF.");
@@ -309,7 +313,7 @@ export function App() {
                 <h2>
                   Calques <span className="count">{masks.length}</span>
                 </h2>
-                <button type="button" className="btn btn-secondary" disabled={pdfBusy} onClick={exportPdf}>
+                <button type="button" className="btn btn-secondary" disabled={pdfBusy || printLayout?.tooLarge} onClick={exportPdf}>
                   <Icon name="download" size={16} />
                   {pdfBusy ? 'Création du PDF…' : 'Exporter tous les calques (PDF)'}
                 </button>
@@ -349,6 +353,7 @@ export function App() {
       <SettingsPanel
         n={n}
         onN={setN}
+        printLayout={printLayout}
         settings={settings}
         onChange={(patch) => setSettings((s) => ({ ...s, ...patch }))}
         onReset={() => {

@@ -97,6 +97,7 @@ test('les réglages sont enregistrés avec le projet et teintes choisies conserv
   await page.getByLabel('Teinte du calque 1').selectOption({ label: 'Gris Payne' });
   await page.getByLabel('Contraste').fill('20');
   await page.getByLabel('Miroir horizontal').check();
+  await page.getByLabel("Largeur de l'image (mm)").fill('150');
   // Un réglage qui ne change pas le nombre de calques garde la teinte choisie à la main.
   await expect(page.getByTestId('layer-card')).toHaveCount(4);
   await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('gris-payne');
@@ -108,6 +109,7 @@ test('les réglages sont enregistrés avec le projet et teintes choisies conserv
   await page.getByRole('button', { name: 'quad.png', exact: true }).click();
   await expect(page.getByLabel('Contraste')).toHaveValue('20');
   await expect(page.getByLabel('Miroir horizontal')).toBeChecked();
+  await expect(page.getByLabel("Largeur de l'image (mm)")).toHaveValue('150');
   await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('gris-payne');
 });
 
@@ -131,4 +133,38 @@ test('exporter tous les calques dans un seul PDF multipages', async ({ page }) =
   expect(text).toContain('(Calque 2/4 · Sanguine · réf. 490483)');
   await expect(page.getByRole('alert')).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Exporter tous les calques (PDF)' })).toBeEnabled();
+});
+
+test('la largeur en mm fixe la taille de l\'image dans le PDF', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('file-input').setInputFiles({ name: 'quad.png', mimeType: 'image/png', buffer: quadrantsPng() });
+  await expect(page.getByTestId('layer-card')).toHaveCount(4);
+  const width = page.getByLabel("Largeur de l'image (mm)");
+  const exportPdf = async () => {
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Exporter tous les calques (PDF)' }).click(),
+    ]);
+    return readFileSync(await download.path()).toString('latin1');
+  };
+
+  await expect(page.getByText('ajustée à la page')).toBeVisible();
+
+  await width.fill('100');
+  await expect(page.getByText('Image imprimée : 100 \u00d7 100 mm \u00b7 page A4 portrait.')).toBeVisible();
+  const a4 = await exportPdf();
+  expect(a4).toContain('/MediaBox [0 0 595.28 841.89]');
+  expect(a4).toContain('q 283.46 0 0 283.46 '); // 100 mm
+
+  await width.fill('250');
+  await expect(page.getByText('Image imprimée : 250 \u00d7 250 mm \u00b7 page A3 portrait.')).toBeVisible();
+  const a3 = await exportPdf();
+  expect(a3).toContain('/MediaBox [0 0 841.89 1190.55]');
+  expect(a3).toContain('q 708.66 0 0 708.66 '); // 250 mm
+
+  await width.fill('');
+  await expect(page.getByText('ajustée à la page')).toBeVisible();
+  await width.fill('99999'); // plafonné à 2000 mm
+  await expect(width).toHaveValue('2000');
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
