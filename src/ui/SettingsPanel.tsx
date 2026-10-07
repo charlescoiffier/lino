@@ -110,6 +110,15 @@ export function SettingsPanel({ n, onN, settings, onChange, onReset, printLayout
           />
           <p className={info.warning ? 'hint is-warning' : 'hint'}>{info.text}</p>
         </div>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={settings.registrationMarks}
+            onChange={(e) => onChange({ registrationMarks: e.target.checked })}
+          />
+          Repères de calage dans le PDF
+        </label>
+        <p className="hint">Une croix à chaque coin de l'image, au même endroit sur toutes les pages, pour superposer les passages.</p>
       </section>
     </aside>
   );

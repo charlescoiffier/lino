@@ -1,6 +1,6 @@
 import { inflateSync } from 'node:zlib';
 import { describe, expect, test } from 'vitest';
-import { layersToPdf, packMask, pageLayout, PT_PER_MM, type PdfLayerPage } from './pdf';
+import { layersToPdf, packMask, PAGE_MARGIN, pageLayout, PT_PER_MM, registrationMarks, type PdfLayerPage } from './pdf';
 
 const latin1 = (bytes: Uint8Array) => Buffer.from(bytes).toString('latin1');
 
@@ -40,9 +40,9 @@ describe('pageLayout', () => {
   ])('image %ix%i : proportions conservées et contenue dans les marges', (w, h) => {
     const l = pageLayout(w, h);
     expect(l.w / l.h).toBeCloseTo(w / h, 6);
-    expect(l.x).toBeGreaterThanOrEqual(36 - 1e-9);
-    expect(l.y).toBeGreaterThanOrEqual(36 - 1e-9);
-    expect(l.x + l.w).toBeLessThanOrEqual(l.pageWidth - 36 + 1e-9);
+    expect(l.x).toBeGreaterThanOrEqual(PAGE_MARGIN - 1e-9);
+    expect(l.y).toBeGreaterThanOrEqual(PAGE_MARGIN - 1e-9);
+    expect(l.x + l.w).toBeLessThanOrEqual(l.pageWidth - PAGE_MARGIN + 1e-9);
     expect(l.y + l.h).toBeLessThan(l.captionY);
   });
 
@@ -68,7 +68,7 @@ describe('pageLayout avec une largeur en mm', () => {
 
   test.each([
     [100, 'A4'],
-    [180, 'A4'],
+    [170, 'A4'],
     [250, 'A3'],
     [380, 'A2'],
     [560, 'A1'],
@@ -87,8 +87,8 @@ describe('pageLayout avec une largeur en mm', () => {
     const l = pageLayout(500, 500, 1500);
     expect(l.format).toBe('sur mesure');
     expect(l.tooLarge).toBe(false);
-    expect(l.x).toBeCloseTo(36, 6);
-    expect(l.x + l.w).toBeCloseTo(l.pageWidth - 36, 6);
+    expect(l.x).toBeCloseTo(PAGE_MARGIN, 6);
+    expect(l.x + l.w).toBeCloseTo(l.pageWidth - PAGE_MARGIN, 6);
     expect(l.y + l.h).toBeLessThan(l.captionY);
   });
 
@@ -99,11 +99,60 @@ describe('pageLayout avec une largeur en mm', () => {
   test('l\'image reste dans la page et sous la légende, quel que soit le format choisi', () => {
     for (const mm of [30, 150, 200, 300, 450, 700, 1000]) {
       const l = pageLayout(640, 480, mm);
-      expect(l.x).toBeGreaterThanOrEqual(36 - 1e-6);
-      expect(l.x + l.w).toBeLessThanOrEqual(l.pageWidth - 36 + 1e-6);
-      expect(l.y).toBeGreaterThanOrEqual(36 - 1e-6);
+      expect(l.x).toBeGreaterThanOrEqual(PAGE_MARGIN - 1e-6);
+      expect(l.x + l.w).toBeLessThanOrEqual(l.pageWidth - PAGE_MARGIN + 1e-6);
+      expect(l.y).toBeGreaterThanOrEqual(PAGE_MARGIN - 1e-6);
       expect(l.y + l.h).toBeLessThanOrEqual(l.captionY + 1e-6);
     }
+  });
+});
+
+describe('registrationMarks', () => {
+  const sizes: [number, number, number][] = [
+    [500, 500, 0],
+    [1600, 900, 0],
+    [300, 1200, 0],
+    [640, 480, 120],
+    [640, 480, 380],
+    [300, 1200, 150],
+    [500, 500, 1500],
+  ];
+
+  test('quatre repères, un par coin, décalés en diagonale vers l\'extérieur', () => {
+    const l = pageLayout(640, 480, 120);
+    const marks = registrationMarks(l);
+    expect(marks).toHaveLength(4);
+    const [bl, br, tl, tr] = marks;
+    expect(bl[0]).toBeLessThan(l.x);
+    expect(bl[1]).toBeLessThan(l.y);
+    expect(br[0]).toBeGreaterThan(l.x + l.w);
+    expect(br[1]).toBeLessThan(l.y);
+    expect(tl[0]).toBeLessThan(l.x);
+    expect(tl[1]).toBeGreaterThan(l.y + l.h);
+    expect(tr[0]).toBeGreaterThan(l.x + l.w);
+    expect(tr[1]).toBeGreaterThan(l.y + l.h);
+    expect(bl[0] - tl[0]).toBeCloseTo(0, 9);
+    expect(br[0] - tr[0]).toBeCloseTo(0, 9);
+  });
+
+  test.each(sizes)('image %ix%i, largeur %i mm : repères dans la page, à 6 mm du bord au moins', (w, h, mm) => {
+    const l = pageLayout(w, h, mm);
+    const clearance = 6 * PT_PER_MM - 1e-6;
+    for (const [cx, cy] of registrationMarks(l)) {
+      expect(cx - 9).toBeGreaterThanOrEqual(clearance);
+      expect(cy - 9).toBeGreaterThanOrEqual(clearance);
+      expect(l.pageWidth - (cx + 9)).toBeGreaterThanOrEqual(clearance);
+      expect(l.pageHeight - (cy + 9)).toBeGreaterThanOrEqual(clearance);
+    }
+  });
+
+  test.each(sizes)('image %ix%i, largeur %i mm : les repères du haut ne touchent pas la légende', (w, h, mm) => {
+    const l = pageLayout(w, h, mm);
+    for (const [, cy] of registrationMarks(l)) expect(cy + 9).toBeLessThanOrEqual(l.captionY - 2);
+  });
+
+  test('mêmes repères pour deux calques de même taille', () => {
+    expect(registrationMarks(pageLayout(800, 600, 200))).toEqual(registrationMarks(pageLayout(800, 600, 200)));
   });
 });
 
@@ -178,5 +227,23 @@ describe('layersToPdf', () => {
 
   test('widthMm trop grand pour une page PDF -> RangeError', async () => {
     await expect(layersToPdf([page(10, 10, () => true)], { widthMm: 6000 })).rejects.toThrow(RangeError);
+  });
+
+  test('repères de calage : 4 croix (16 courbes) par page, désactivables', async () => {
+    const curves = (text: string) => (text.match(/\d c\n/g) ?? []).length;
+    const withMarks = latin1(await layersToPdf(pages));
+    expect(curves(withMarks)).toBe(4 * 4 * pages.length);
+    const explicit = latin1(await layersToPdf(pages, { registrationMarks: true }));
+    expect(curves(explicit)).toBe(curves(withMarks));
+    const without = latin1(await layersToPdf(pages, { registrationMarks: false }));
+    expect(curves(without)).toBe(0);
+    expect(without.length).toBeLessThan(withMarks.length);
+  });
+
+  test('les repères sont aux mêmes coordonnées sur toutes les pages', async () => {
+    const text = latin1(await layersToPdf(pages));
+    const blocks = [...text.matchAll(/q 0 G 0\.5 w\n([^Q]*)Q\n/g)].map((m) => m[1]);
+    expect(blocks).toHaveLength(pages.length);
+    expect(new Set(blocks).size).toBe(1);
   });
 });

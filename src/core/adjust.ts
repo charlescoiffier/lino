@@ -11,6 +11,8 @@ export interface Settings {
   definition: number;
   /** Largeur de l'image à l'impression (export PDF), en mm. 0 = ajustée à une page A4. */
   printWidthMm: number;
+  /** Croix de repérage aux coins de l'image sur chaque page du PDF. */
+  registrationMarks: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -23,6 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   mirror: false,
   definition: 1600,
   printWidthMm: 0,
+  registrationMarks: true,
 };
 
 export const SETTING_LIMITS = {
@@ -57,6 +60,7 @@ export function normalizeSettings(raw: unknown): Settings {
     mirror: typeof r.mirror === 'boolean' ? r.mirror : DEFAULT_SETTINGS.mirror,
     definition: numeric(r, 'definition'),
     printWidthMm: numeric(r, 'printWidthMm'),
+    registrationMarks: typeof r.registrationMarks === 'boolean' ? r.registrationMarks : DEFAULT_SETTINGS.registrationMarks,
   };
 }
 

@@ -67,7 +67,7 @@ export function App() {
   const { brightness, contrast, saturation, blur, cleanup, invert, mirror, definition } = applied;
   // La définition agit au chargement de l'image, pas dans le worker.
   const processSettings = useMemo<Settings>(
-    () => ({ brightness, contrast, saturation, blur, cleanup, invert, mirror, definition: DEFAULT_SETTINGS.definition, printWidthMm: DEFAULT_SETTINGS.printWidthMm }),
+    () => ({ brightness, contrast, saturation, blur, cleanup, invert, mirror, definition: DEFAULT_SETTINGS.definition, printWidthMm: DEFAULT_SETTINGS.printWidthMm, registrationMarks: DEFAULT_SETTINGS.registrationMarks }),
     [brightness, contrast, saturation, blur, cleanup, invert, mirror],
   );
 
@@ -254,7 +254,7 @@ export function App() {
           color: colors[k],
         };
       });
-      const bytes = await layersToPdf(pages, { title: `${base} \u00b7 calques`, widthMm: settings.printWidthMm });
+      const bytes = await layersToPdf(pages, { title: `${base} \u00b7 calques`, widthMm: settings.printWidthMm, registrationMarks: settings.registrationMarks });
       downloadBlob(new Blob([bytes as Uint8Array<ArrayBuffer>], { type: 'application/pdf' }), `${base}-calques.pdf`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Impossible de créer le PDF.");

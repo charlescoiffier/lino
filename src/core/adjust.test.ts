@@ -100,8 +100,15 @@ describe('normalizeSettings', () => {
     expect(DEFAULT_SETTINGS.printWidthMm).toBe(0);
   });
 
+  test('repères de calage : activés par défaut, booléen conservé, valeur invalide -> défaut', () => {
+    expect(DEFAULT_SETTINGS.registrationMarks).toBe(true);
+    expect(normalizeSettings({ registrationMarks: false }).registrationMarks).toBe(false);
+    expect(normalizeSettings({ registrationMarks: 'non' }).registrationMarks).toBe(true);
+    expect(normalizeSettings(undefined).registrationMarks).toBe(true);
+  });
+
   test('valeurs valides conservées', () => {
-    const wanted = settings({ brightness: 12, invert: true, mirror: true, definition: 800, cleanup: 2, printWidthMm: 210 });
+    const wanted = settings({ brightness: 12, invert: true, mirror: true, definition: 800, cleanup: 2, printWidthMm: 210, registrationMarks: false });
     expect(normalizeSettings(wanted)).toEqual(wanted);
   });
 });

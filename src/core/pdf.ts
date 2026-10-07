@@ -13,6 +13,8 @@ export interface PdfOptions {
   title?: string;
   /** Largeur de l'image sur le papier, en mm. 0 ou absent : image ajustée à une page A4. */
   widthMm?: number;
+  /** Croix de repérage aux quatre coins de l'image (par défaut : oui). */
+  registrationMarks?: boolean;
 }
 
 export interface PageLayout {
@@ -36,10 +38,16 @@ export interface PageLayout {
 }
 
 export const PT_PER_MM = 72 / 25.4;
-const MARGIN = 36;
-const CAPTION_BAND = 28;
+const MARGIN = 48;
+/** Marge de la page, en points : l'image et les repères restent à l'intérieur. */
+export const PAGE_MARGIN = MARGIN;
+const CAPTION_BAND = 44;
 const CAPTION_SIZE = 11;
 const SWATCH = 10;
+/** Croix de repérage : distance (en diagonale) au coin de l'image, rayon du cercle, demi-longueur des branches. */
+const MARK_OFFSET = 20;
+const MARK_RADIUS = 5;
+const MARK_ARM = 9;
 const MAX_PAGE_PT = 14400;
 /** Formats ISO (côté court, côté long en mm), du plus petit au plus grand. */
 const FORMATS = [
@@ -105,6 +113,21 @@ export function pageLayout(width: number, height: number, widthMm = 0): PageLayo
   return place(needW, needH, w, h, 'sur mesure');
 }
 
+/**
+ * Centres des quatre croix de repérage : un par coin du cadre de l'image, décalé vers l'extérieur en diagonale
+ * (bas gauche, bas droite, haut gauche, haut droite). Elles ne dépendent que de la disposition : identiques sur toutes les pages.
+ */
+export function registrationMarks(layout: PageLayout): [number, number][] {
+  const { x, y, w, h } = layout;
+  const d = MARK_OFFSET;
+  return [
+    [x - d, y - d],
+    [x + w + d, y - d],
+    [x - d, y + h + d],
+    [x + w + d, y + h + d],
+  ];
+}
+
 /** Masque (1 = encre) → bitmap 1 bit par pixel, lignes alignées sur l'octet. Bit 0 = noir (encre), 1 = blanc. */
 export function packMask(mask: Uint8Array, width: number, height: number): Uint8Array {
   const rowBytes = Math.ceil(width / 8);
@@ -158,6 +181,32 @@ function concat(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
+/** Opérateurs PDF des croix de repérage : un cercle et deux traits en noir, 0,5 pt, une opération par ligne. */
+function marksContent(layout: PageLayout): string {
+  const r = MARK_RADIUS;
+  const k = 0.5523 * r;
+  const lines = ['q 0 G 0.5 w'];
+  for (const [cx, cy] of registrationMarks(layout)) {
+    const p = (dx: number, dy: number) => `${num(cx + dx)} ${num(cy + dy)}`;
+    lines.push(
+      `${p(-MARK_ARM, 0)} m`,
+      `${p(MARK_ARM, 0)} l`,
+      'S',
+      `${p(0, -MARK_ARM)} m`,
+      `${p(0, MARK_ARM)} l`,
+      'S',
+      `${p(r, 0)} m`,
+      `${p(r, k)} ${p(k, r)} ${p(0, r)} c`,
+      `${p(-k, r)} ${p(-r, k)} ${p(-r, 0)} c`,
+      `${p(-r, -k)} ${p(-k, -r)} ${p(0, -r)} c`,
+      `${p(k, -r)} ${p(r, -k)} ${p(r, 0)} c`,
+      'S',
+    );
+  }
+  lines.push('Q');
+  return lines.join('\n') + '\n';
+}
+
 /**
  * Assemble un PDF multipages : une page par calque, avec l'image en noir et blanc 1 bit, un fin cadre, et une légende
  * précédée d'un carré de la couleur de la teinte. Aucun lecteur ni dépendance : le fichier est écrit à la main.
@@ -197,6 +246,7 @@ export async function layersToPdf(pages: PdfLayerPage[], options: PdfOptions = {
       ascii(' Tj ET\n'),
       ascii(`q ${num(layout.w)} 0 0 ${num(layout.h)} ${num(layout.x)} ${num(layout.y)} cm /Im0 Do Q\n`),
       ascii(`q 0.6 G 0.5 w ${num(layout.x)} ${num(layout.y)} ${num(layout.w)} ${num(layout.h)} re S Q\n`),
+      ascii(options.registrationMarks === false ? '' : marksContent(layout)),
     ]);
 
     const raw = packMask(page.mask, page.width, page.height);

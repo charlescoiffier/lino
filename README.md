@@ -61,6 +61,7 @@ Les calques sont triés du plus clair (calque 1) au plus sombre. Chaque ligne in
 | Inverser les valeurs | Échange clairs et foncés. |
 | Miroir horizontal | Retourne l'image de gauche à droite. L'impression inverse l'image : graver à l'envers donne un tirage dans le bon sens, ce qui compte surtout avec du texte. |
 | Largeur de l'image (mm) | Taille de l'image sur le papier dans l'export PDF, de 1 à 2000 mm ; la hauteur suit les proportions. Vide : l'image est ajustée à une page A4. Le panneau indique la taille obtenue et le format de page choisi. |
+| Repères de calage dans le PDF | Ajoute une croix de repérage à chaque coin de l'image sur toutes les pages du PDF (activé par défaut). |
 
 « Réinitialiser les réglages » remet tout à zéro (et 4 couleurs).
 
@@ -69,7 +70,9 @@ Les calques sont triés du plus clair (calque 1) au plus sombre. Chaque ligne in
 - **Exporter le calque K** : un PNG noir et blanc nommé `calque-K.png` (noir = encre).
 - **Exporter tous les calques (PDF)** : un seul fichier `<nom>-calques.pdf`, une page par calque. Chaque page porte une
   légende avec la couleur de la teinte, son nom et sa référence (par exemple « Calque 2/4 · Jaune foncé · réf. 490473 »).
-  L'image est au même endroit sur toutes les pages, ce qui aide à repérer les passages les uns sur les autres.
+  L'image est au même endroit sur toutes les pages, et quatre **repères de calage** (une croix dans un cercle à chaque
+  coin, juste à l'extérieur de l'image) sont tracés aux mêmes coordonnées : ils permettent de superposer les passages ou
+  de repositionner la feuille d'un tirage à l'autre. On peut les désactiver (« Repères de calage dans le PDF »).
   - Sans **largeur** indiquée : page A4 (en portrait ou en paysage selon l'image), image ajustée à la page.
   - Avec une **largeur en mm** (réglage « Largeur de l'image » de la section Impression) : l'image est imprimée à cette
     taille exacte. Lino choisit le plus petit format de page (A4, A3, A2, A1, A0) où elle tient avec ses marges, et une
@@ -171,14 +174,20 @@ pages, police Helvetica (légendes en Latin-1), puis trois objets par page (page
 
 `pageLayout(width, height, widthMm)` calcule la page de chaque calque :
 - **sans largeur** (`widthMm` nul) : A4, en paysage si l'image est plus large que haute, image mise à l'échelle pour
-  tenir dans les marges (36 pt) sous la légende ;
+  tenir dans les marges (48 pt) sous la légende ;
 - **avec une largeur** : l'image est placée à cette taille exacte (mm → points, 72 / 25,4), et la page est le plus petit
   format ISO (A4 à A0, orientation de l'image d'abord) où elle tient avec marges et légende ; au-delà de l'A0, la page est
   sur mesure. `tooLarge` signale une page de plus de 14 400 pt (200 pouces, limite des lecteurs PDF) : `layersToPdf` lève
   alors une `RangeError` et l'interface désactive le bouton.
 
-La disposition ne dépend que des dimensions de l'image et de la largeur, donc tous les calques tombent au même endroit. Elle
-renvoie aussi le format retenu et la taille imprimée, que le panneau de réglages affiche. La largeur est le réglage
+La disposition ne dépend que des dimensions de l'image et de la largeur, donc tous les calques tombent au même endroit.
+
+`registrationMarks(layout)` donne les centres des quatre **repères de calage** : un par coin du cadre de l'image, décalé
+de 20 pt vers l'extérieur en diagonale. Chaque repère est un cercle (rayon 5 pt) et deux traits (demi-longueur 9 pt), en noir à
+0,5 pt (`marksContent`). La marge de page (48 pt) et la hauteur réservée à la légende garantissent que les repères restent
+à plus de 6 mm du bord du papier et ne touchent pas la légende, quelle que soit la taille de l'image ; des tests le
+vérifient pour plusieurs formats. L'option `registrationMarks` de `layersToPdf` (réglage `registrationMarks`, activé par
+défaut, enregistré avec le projet) les désactive. La disposition renvoie aussi le format retenu et la taille imprimée, que le panneau de réglages affiche. La largeur est le réglage
 `printWidthMm` (0 = automatique, 2000 mm au plus), enregistré avec le projet comme les autres. Les caractères hors Latin-1
 d'une légende sont remplacés par « ? ». L'interface (`exportPdf` dans `App.tsx`) compose les légendes à partir des teintes
 choisies et télécharge le fichier.
@@ -229,9 +238,9 @@ mode sans sauvegarde et le signale dans la barre latérale.
 - **Vitest** (`npm test`) : couleur, quantification (nombre de calques, transparence, image unie, N hors bornes),
   réglages, calques (masques disjoints couvrant l'image), palettes, client de worker (annulation, réponses périmées),
   redimensionnement, projets (IndexedDB simulée, fichier projet), export PDF (bit à bit, table `xref`, images relues
-  après décompression, échappement des légendes, choix du format de page selon la largeur en mm).
+  après décompression, échappement des légendes, choix du format de page selon la largeur en mm, position des repères de calage).
 - **Playwright** (`npm run e2e`) : charger une image, séparer en 4 calques, changer N, attribuer des teintes, exporter,
-  fichier qui n'est pas une image, enregistrer puis rouvrir un projet, réglages et réinitialisation, export PDF multipages, largeur en mm (taille de l'image et format de page dans le fichier).
+  fichier qui n'est pas une image, enregistrer puis rouvrir un projet, réglages et réinitialisation, export PDF multipages, largeur en mm (taille de l'image et format de page dans le fichier), repères de calage.
 
 ## Publication
 

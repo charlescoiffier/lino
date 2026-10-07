@@ -98,6 +98,7 @@ test('les réglages sont enregistrés avec le projet et teintes choisies conserv
   await page.getByLabel('Contraste').fill('20');
   await page.getByLabel('Miroir horizontal').check();
   await page.getByLabel("Largeur de l'image (mm)").fill('150');
+  await page.getByLabel('Repères de calage dans le PDF').uncheck();
   // Un réglage qui ne change pas le nombre de calques garde la teinte choisie à la main.
   await expect(page.getByTestId('layer-card')).toHaveCount(4);
   await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('gris-payne');
@@ -110,6 +111,7 @@ test('les réglages sont enregistrés avec le projet et teintes choisies conserv
   await expect(page.getByLabel('Contraste')).toHaveValue('20');
   await expect(page.getByLabel('Miroir horizontal')).toBeChecked();
   await expect(page.getByLabel("Largeur de l'image (mm)")).toHaveValue('150');
+  await expect(page.getByLabel('Repères de calage dans le PDF')).not.toBeChecked();
   await expect(page.getByLabel('Teinte du calque 1')).toHaveValue('gris-payne');
 });
 
@@ -167,4 +169,26 @@ test('la largeur en mm fixe la taille de l\'image dans le PDF', async ({ page })
   await width.fill('99999'); // plafonné à 2000 mm
   await expect(width).toHaveValue('2000');
   await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('les repères de calage sont dans le PDF par défaut et se désactivent', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('file-input').setInputFiles({ name: 'quad.png', mimeType: 'image/png', buffer: quadrantsPng() });
+  await expect(page.getByTestId('layer-card')).toHaveCount(4);
+  const marks = page.getByLabel('Repères de calage dans le PDF');
+  await expect(marks).toBeChecked();
+
+  const exportPdf = async () => {
+    const [download] = await Promise.all([
+      page.waitForEvent('download'),
+      page.getByRole('button', { name: 'Exporter tous les calques (PDF)' }).click(),
+    ]);
+    return readFileSync(await download.path()).toString('latin1');
+  };
+  const curves = (text: string) => (text.match(/\d c\n/g) ?? []).length;
+
+  // 4 croix (cercle = 4 courbes) par page, 4 pages
+  expect(curves(await exportPdf())).toBe(4 * 4 * 4);
+  await marks.uncheck();
+  expect(curves(await exportPdf())).toBe(0);
 });
