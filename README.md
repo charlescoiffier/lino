@@ -1,3 +1,6 @@
+> [!WARNING]
+> Ce projet a été vibecodé avec l’aide de l’intelligence artificielle.
+
 # Lino
 
 [![Build et déploiement](https://github.com/charlescoiffier/lino/actions/workflows/deploy.yml/badge.svg)](https://github.com/charlescoiffier/lino/actions/workflows/deploy.yml)
